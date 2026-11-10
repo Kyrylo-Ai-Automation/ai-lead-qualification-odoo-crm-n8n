@@ -1,0 +1,97 @@
+{
+  "name": "SmartHome 4 — Тест: 5 заявок",
+  "nodes": [
+    {
+      "id": "0d68e38e-0daa-4d4a-9bc9-927cb4df7d2b",
+      "name": "▶ Тест: надіслати 5 заявок",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5aab58b2-f44c-4bb1-bd0f-3096983401fb",
+      "name": "5 тестових заявок",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n// 5 тестових заявок за сценарієм HR: ~5 звернень на день\nreturn [\n { channel:'instagram', name:'Олена', phone:'+380671112233', partner_source:'Loft Design',\n   text:\"Добрий день! Я дизайнерка інтер'єрів, студія Loft Design. Веду проєкт квартири 140 м² на Печерську, зараз чорновий ремонт. Клієнт хоче розумне освітлення, клімат і автоматичні штори. Бюджет близько 12 тис. $. Коли можна обговорити?\" },\n { channel:'callcenter', name:'Андрій', phone:'+380502223344', partner_source:'Кол-центр: прозвон забудовників',\n   text:\"Звіт кол-центру: забудовник ЖК «Riverside», менеджер з закупівель Андрій. 2 секції, 120 квартир, стадія — коробка. Цікавить базовий пакет розумного дому для всіх квартир (безпека + клімат). Старт продажів квартир навесні, просить КП до кінця місяця.\" },\n { channel:'tiktok', name:'Максим', phone:'+380933334455',\n   text:\"Привіт, скільки коштує розумний будинок? У нас будинок 220 м² під Києвом, ремонт уже зроблений. Хочемо керувати світлом і безпекою з телефону.\" },\n { channel:'instagram', name:'Ігор', phone:'+380674445566',\n   text:\"Готельний комплекс у Буковелі, 40 номерів, реконструкція починається в січні. Потрібна система керування кліматом і освітленням номерів. Я головний інженер, контакт — Ігор.\" },\n { channel:'target', name:'ТОВ Кабель-Опт', phone:'+380445556677',\n   text:\"Продаємо кабель і автоматику оптом за найкращими цінами, пропонуємо співпрацю. Прайс надішлемо на пошту.\" },\n].map(j => ({ json: j }));\n"
+      }
+    },
+    {
+      "id": "39e294dd-8ae3-40fd-b93a-5aa8e57c2d6f",
+      "name": "POST на вебхук",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/smarthome-lead",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c8ab7ae4-eca6-4527-b3b3-911e4e098e36",
+      "name": "Note 26",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ],
+      "parameters": {
+        "content": "## D. Тест\n5 заявок за сценарієм HR (~5 звернень/день)",
+        "width": 700,
+        "height": 280,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "▶ Тест: надіслати 5 заявок": {
+      "main": [
+        [
+          {
+            "node": "5 тестових заявок",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 тестових заявок": {
+      "main": [
+        [
+          {
+            "node": "POST на вебхук",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

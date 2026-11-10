@@ -1,0 +1,370 @@
+{
+  "name": "SmartHome 1 — Заявка → AI → Odoo → Telegram",
+  "nodes": [
+    {
+      "id": "f4c5f612-8c3a-4420-8daa-14f6ce4157ba",
+      "name": "Нова заявка (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smarthome-lead",
+        "options": {}
+      }
+    },
+    {
+      "id": "7210c01d-cd93-4ec4-9d20-5ce074f2aaf5",
+      "name": "AI-кваліфікація",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        240,
+        100
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Канал: {{ $json.body.channel }}\nІм'я: {{ $json.body.name || '—' }}\nТелефон: {{ $json.body.phone || '—' }}\nПартнер-джерело (з форми/кол-центру): {{ $json.body.partner_source || '—' }}\n\nТекст заявки:\n{{ $json.body.text }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ти — асистент відділу продажу компанії SmartHome (проєктування та монтаж систем розумного дому під ключ, Україна).\nТвоє завдання — ВИТЯГНУТИ факти з вхідної заявки. Не вигадуй: якщо факту немає в тексті — null або \"unknown\".\nКласифікація partner_type:\n- designer: дизайнер інтер'єру, що діє від себе;\n- studio: дизайн- або архітектурна студія;\n- developer: забудовник, девелопер, ЖК;\n- hotel: готель, готельний комплекс, HoReCa;\n- contractor: електрик, прораб, монтажна бригада;\n- private: власник квартири/будинку для себе.\nrenovation_stage: project = ще проєкт/дизайн; rough = чорновий ремонт, коробка, стіни без оздоблення; finish = чистовий ремонт; done = ремонт завершено.\nЕтап ремонту критичний: на етапах project і rough ще можна прокласти кабелі, це найкращий момент для SmartHome.\nПиши summary, next_step і missing_info українською."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "be1226f5-835e-402d-8d6a-2df786e7f223",
+      "name": "Gemini Flash",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        200,
+        320
+      ],
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "id": "9fde05d8-9675-42ea-a7ef-66f3facf620a",
+      "name": "JSON-схема",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        320
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"is_target\": {\n      \"type\": \"boolean\",\n      \"description\": \"true якщо це запит на розумний дім/автоматизацію об'єкта; false для спаму, постачальників, вакансій\"\n    },\n    \"client_name\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"company\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"partner_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"designer\",\n        \"studio\",\n        \"developer\",\n        \"hotel\",\n        \"contractor\",\n        \"private\",\n        \"unknown\"\n      ]\n    },\n    \"object_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"apartment\",\n        \"house\",\n        \"commercial\",\n        \"hotel\",\n        \"office\",\n        \"unknown\"\n      ]\n    },\n    \"area_m2\": {\n      \"type\": [\n        \"integer\",\n        \"null\"\n      ],\n      \"description\": \"загальна площа одного об'єкта в м²\"\n    },\n    \"units\": {\n      \"type\": [\n        \"integer\",\n        \"null\"\n      ],\n      \"description\": \"кількість квартир/номерів, якщо об'єктів кілька\"\n    },\n    \"renovation_stage\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"project\",\n        \"rough\",\n        \"finish\",\n        \"done\",\n        \"unknown\"\n      ]\n    },\n    \"systems\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\",\n        \"enum\": [\n          \"lighting\",\n          \"climate\",\n          \"security\",\n          \"multiroom\",\n          \"curtains\"\n        ]\n      }\n    },\n    \"budget_usd\": {\n      \"type\": [\n        \"integer\",\n        \"null\"\n      ]\n    },\n    \"timeline\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ],\n      \"description\": \"коротко, напр. 'старт у січні'\"\n    },\n    \"summary\": {\n      \"type\": \"string\",\n      \"description\": \"1-2 речення українською для менеджера\"\n    },\n    \"next_step\": {\n      \"type\": \"string\",\n      \"description\": \"що менеджеру зробити першим\"\n    },\n    \"missing_info\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"що треба уточнити на дзвінку\"\n    }\n  },\n  \"required\": [\n    \"is_target\",\n    \"partner_type\",\n    \"object_type\",\n    \"renovation_stage\",\n    \"systems\",\n    \"summary\",\n    \"next_step\",\n    \"missing_info\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "1bd06fc3-5f71-4914-911e-df22b1547797",
+      "name": "Валідація + скоринг",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        100
+      ],
+      "parameters": {
+        "jsCode": "\n// AI лише витягує факти. Скор і пріоритет рахує код — прозоро і перевірювано.\nconst o = $json.output || {};\nconst src = $('Нова заявка (Webhook)').item.json.body;\nconst pick = (v, allowed, def) => allowed.includes(v) ? v : def;\nconst partner = pick(o.partner_type, ['designer','studio','developer','hotel','contractor','private'], 'unknown');\nconst objType = pick(o.object_type, ['apartment','house','commercial','hotel','office'], 'unknown');\nconst stage  = pick(o.renovation_stage, ['project','rough','finish','done'], 'unknown');\nconst systems = (Array.isArray(o.systems) ? o.systems : []).filter(s => ['lighting','climate','security','multiroom','curtains'].includes(s));\nconst area = Number.isInteger(o.area_m2) && o.area_m2 > 0 && o.area_m2 < 100000 ? o.area_m2 : null;\nconst budget = Number.isInteger(o.budget_usd) && o.budget_usd > 0 ? o.budget_usd : null;\n\n// --- скоринг 0–100 ---\nlet score = 0;\nscore += {project:30, rough:30, finish:10, done:5, unknown:0}[stage];\nscore += {developer:25, hotel:25, studio:20, designer:20, contractor:15, private:10, unknown:0}[partner];\nif (area) score += area >= 150 ? 15 : area >= 80 ? 10 : 5;\nif (o.units && o.units > 1) score += 15;\nif (budget) score += 10;\nif (o.timeline) score += 10;\nif (systems.length >= 3) score += 10; else if (systems.length) score += 5;\nscore = Math.min(100, score);\nconst temp = score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cold';\n\n// --- ID з Odoo (your-company) ---\nconst TAG = {designer:1, studio:2, developer:3, hotel:4, contractor:5, private:6, hot:7, warm:8, cold:9, instagram:10, tiktok:11, callcenter:12, target:13};\nconst TEAM = partner === 'private' || partner === 'unknown' ? 1 : 4;   // 1 = Прямі клієнти, 4 = Партнери\nconst tags = [TAG[partner], TAG[temp], TAG[src.channel]].filter(Boolean);\n\nconst L = {\n  partner: {designer:'Дизайнер', studio:'Студія', developer:'Забудовник', hotel:'Готель', contractor:'Електрик/прораб', private:'Приватний', unknown:'Невідомо'},\n  obj: {apartment:'квартира', house:'будинок', commercial:'комерція', hotel:'готель', office:'офіс', unknown:'об\\'єкт'},\n  stage: {project:'проєкт', rough:'чорновий ремонт', finish:'чистовий ремонт', done:'ремонт завершено', unknown:'невідомо'},\n  temp: {hot:'🔥 Гарячий', warm:'🟡 Теплий', cold:'🔵 Холодний'},\n};\nconst who = o.company || o.client_name || src.name || 'Без імені';\nconst title = `${L.partner[partner]}: ${who} — ${L.obj[objType]}${area ? ' ' + area + ' м²' : ''}`;\n\nconst vals = {\n  name: title,\n  type: 'opportunity',\n  team_id: TEAM,\n  stage_id: 1,\n  priority: {hot:'3', warm:'2', cold:'1'}[temp],\n  tag_ids: [[6, 0, tags]],\n  contact_name: o.client_name || src.name || false,\n  partner_name: o.company || false,\n  phone: src.phone || false,\n  email_from: src.email || false,\n  description: `<p><b>Оригінал заявки (${src.channel}):</b></p><p>${String(src.text||'').replace(/</g,'&lt;')}</p><p><b>Уточнити:</b> ${(o.missing_info||[]).join('; ') || '—'}</p>`,\n  lead_properties: {\n    partner_type: partner === 'unknown' ? false : partner,\n    object_type: objType === 'unknown' ? false : objType,\n    area_m2: area || 0,\n    renovation_stage: stage === 'unknown' ? false : stage,\n    systems,\n    budget_usd: budget || 0,\n    timeline: o.timeline || false,\n    partner_source: src.partner_source || o.company || false,\n    ai_score: score,\n    ai_summary: `${o.summary || ''}\\nНаступний крок: ${o.next_step || '—'}`,\n  },\n};\nreturn [{ json: { is_target: o.is_target !== false, vals, score, temp, title, card: {\n  who, partner: L.partner[partner], obj: L.obj[objType], area, stage: L.stage[stage], systems, budget,\n  timeline: o.timeline, summary: o.summary, next_step: o.next_step, missing: o.missing_info || [],\n  channel: src.channel, phone: src.phone, temp: L.temp[temp] } } }];\n"
+      }
+    },
+    {
+      "id": "57214e80-e41c-483f-81a9-29a172179eaa",
+      "name": "Цільова?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bba838dd-2095-43be-82c8-71f7e04cc5b8",
+              "leftValue": "={{ $json.is_target }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5929062e-ace0-471c-93bc-1d5c3a72dfe5",
+      "name": "Odoo: створити лід",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-company.odoo.com/json/2/crm.lead/create",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Odoo-Database",
+              "value": "your-company"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vals_list: [ $json.vals ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Odoo JSON-2 (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "9293d577-e44f-4118-8e32-489ff1cfc92a",
+      "name": "Картка для менеджера",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n// Odoo JSON-2 create повертає масив id\nconst raw = $input.first().json;\nconst id = Array.isArray(raw) ? raw[0] : (raw.data?.[0] ?? raw.data ?? raw[0] ?? raw.id);\nconst c = $('Валідація + скоринг').first().json.card;\nconst s = $('Валідація + скоринг').first().json.score;\nconst esc = t => String(t ?? '—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst sys = {lighting:'світло', climate:'клімат', security:'безпека', multiroom:'мультирум', curtains:'штори'};\nconst text = [\n  `<b>${c.temp} лід · AI-скор ${s}/100</b>`,\n  ``,\n  `<b>${esc(c.who)}</b> — ${esc(c.partner)}`,\n  `🏠 ${esc(c.obj)}${c.area ? ', ' + c.area + ' м²' : ''} · етап: <b>${esc(c.stage)}</b>`,\n  `⚙️ ${c.systems.length ? c.systems.map(x => sys[x]).join(', ') : '—'}`,\n  `💰 ${c.budget ? '$' + c.budget.toLocaleString('uk-UA') : 'бюджет не вказано'} · ⏱ ${esc(c.timeline)}`,\n  `📞 ${esc(c.phone)} · канал: ${esc(c.channel)}`,\n  ``,\n  `📝 ${esc(c.summary)}`,\n  `👉 <b>Наступний крок:</b> ${esc(c.next_step)}`,\n  c.missing.length ? `❓ Уточнити: ${esc(c.missing.join('; '))}` : '',\n].filter(x => x !== '').join('\\n');\nreturn [{ json: { id, text, url: `https://your-company.odoo.com/odoo/crm/${id}` } }];\n"
+      }
+    },
+    {
+      "id": "ddc36780-d44a-4dcf-b7be-7277540e67c7",
+      "name": "Telegram: картка ліда",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Взяв у роботу",
+                    "additionalFields": {
+                      "callback_data": "={{ 'take:' + $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Нецільовий",
+                    "additionalFields": {
+                      "callback_data": "={{ 'lost:' + $json.id }}"
+                    }
+                  },
+                  {
+                    "text": "🔗 Odoo",
+                    "additionalFields": {
+                      "url": "={{ $json.url }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram SmartHome Bot"
+        }
+      }
+    },
+    {
+      "id": "fafca75d-d33c-441a-b5a5-988255911a96",
+      "name": "Telegram: нецільове",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        220
+      ],
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "={{ '⚪️ Нецільове звернення, у CRM не заведено:\\n' + $('Нова заявка (Webhook)').item.json.body.text.slice(0,200) }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram SmartHome Bot"
+        }
+      }
+    },
+    {
+      "id": "44b67d42-01eb-4f72-938b-31f4da6cc75b",
+      "name": "Note 23",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -160
+      ],
+      "parameters": {
+        "content": "## A. Вхідна заявка → AI → Odoo → Telegram\nAI лише **витягує факти** (строгий JSON). Скор 0–100 і пріоритет рахує **код** — прозоро й перевірювано.",
+        "width": 1700,
+        "height": 560,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Нова заявка (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "AI-кваліфікація",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Flash": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI-кваліфікація",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON-схема": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI-кваліфікація",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-кваліфікація": {
+      "main": [
+        [
+          {
+            "node": "Валідація + скоринг",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Валідація + скоринг": {
+      "main": [
+        [
+          {
+            "node": "Цільова?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Цільова?": {
+      "main": [
+        [
+          {
+            "node": "Odoo: створити лід",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: нецільове",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odoo: створити лід": {
+      "main": [
+        [
+          {
+            "node": "Картка для менеджера",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Картка для менеджера": {
+      "main": [
+        [
+          {
+            "node": "Telegram: картка ліда",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

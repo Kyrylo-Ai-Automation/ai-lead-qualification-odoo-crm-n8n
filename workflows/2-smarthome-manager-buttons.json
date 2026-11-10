@@ -1,0 +1,191 @@
+{
+  "name": "SmartHome 2 — Кнопки менеджера",
+  "nodes": [
+    {
+      "id": "f9353e7a-9113-406c-884c-5837b186fb7e",
+      "name": "Кнопки менеджера (Telegram)",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram SmartHome Bot"
+        }
+      }
+    },
+    {
+      "id": "06f2e597-4794-44c8-99a1-b283ac46c19f",
+      "name": "Розібрати кнопку",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst q = $json.callback_query;\nconst [action, id] = String(q.data || '').split(':');\nreturn [{ json: { action, id: Number(id), query_id: q.id, chat_id: q.message.chat.id, user: q.from.first_name || q.from.username } }];\n"
+      }
+    },
+    {
+      "id": "d9f44725-b956-41f2-a31e-c19598e56167",
+      "name": "Odoo: оновити етап",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-company.odoo.com/json/2/crm.lead/write",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Odoo-Database",
+              "value": "your-company"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: [$json.id], vals: $json.action === 'take' ? { stage_id: 5 } : { active: false } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Odoo JSON-2 (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "73f4252c-733e-49c8-9169-0342e6c6abbe",
+      "name": "Відповісти на кнопку",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('Розібрати кнопку').item.json.query_id }}",
+        "additionalFields": {
+          "text": "={{ $('Розібрати кнопку').item.json.action === 'take' ? 'Лід переведено в «Контакт»' : 'Лід закрито як нецільовий' }}"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram SmartHome Bot"
+        }
+      }
+    },
+    {
+      "id": "075a655a-4cba-42e1-9e80-95da43f4ebe1",
+      "name": "Telegram: підтвердження",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "chatId": "={{ $('Розібрати кнопку').item.json.chat_id }}",
+        "text": "={{ ($('Розібрати кнопку').item.json.action === 'take' ? '✅ ' : '❌ ') + $('Розібрати кнопку').item.json.user + ($('Розібрати кнопку').item.json.action === 'take' ? ' взяв лід #' : ' закрив лід #') + $('Розібрати кнопку').item.json.id }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram SmartHome Bot"
+        }
+      }
+    },
+    {
+      "id": "28f8aa49-8e38-432e-b8b5-aa5424d2f3cd",
+      "name": "Note 24",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ],
+      "parameters": {
+        "content": "## B. Кнопки менеджера\n✅ → етап «Контакт», ❌ → лід архівується",
+        "width": 1140,
+        "height": 280,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Кнопки менеджера (Telegram)": {
+      "main": [
+        [
+          {
+            "node": "Розібрати кнопку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Розібрати кнопку": {
+      "main": [
+        [
+          {
+            "node": "Odoo: оновити етап",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odoo: оновити етап": {
+      "main": [
+        [
+          {
+            "node": "Відповісти на кнопку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Відповісти на кнопку": {
+      "main": [
+        [
+          {
+            "node": "Telegram: підтвердження",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
